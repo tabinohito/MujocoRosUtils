@@ -3,11 +3,11 @@
 #include <geometry_msgs/PointStamped.h>
 #include <geometry_msgs/QuaternionStamped.h>
 #include <geometry_msgs/Vector3Stamped.h>
+#include <std_msgs/Float64MultiArray.h>
 
 #include <mujoco/mujoco.h>
 
 #include <mujoco_ros_utils/ScalarStamped.h>
-#include <std_msgs/Float64MultiArray.h>
 
 namespace MujocoRosUtils
 {
@@ -125,7 +125,8 @@ SensorPublisher * SensorPublisher::Create(const mjModel * m, mjData * d, int plu
   // input final sensor id when max_sensor_num > 1
   if(max_sensor_num > 1)
   {
-    if(!(std::find(sensor_id_list.value().begin(), sensor_id_list.value().end(), sensor_id) == sensor_id_list.value().end()))
+    if(!(std::find(sensor_id_list.value().begin(), sensor_id_list.value().end(), sensor_id)
+         == sensor_id_list.value().end()))
     {
       mju_error("[SensorPublisher] The sensors with the specified name not found.");
       return nullptr;
@@ -228,15 +229,15 @@ SensorPublisher * SensorPublisher::Create(const mjModel * m, mjData * d, int plu
 }
 
 SensorPublisher::SensorPublisher(const mjModel * m,
-                                 mjData * ,//d,
+                                 mjData *, // d,
                                  int sensor_id,
                                  MessageType msg_type,
                                  const std::string & frame_id,
                                  const std::string & topic_name,
                                  mjtNum publish_rate,
-                                 const std::vector<int>& sensor_id_list)
+                                 const std::vector<int> & sensor_id_list)
 : sensor_id_(sensor_id), msg_type_(msg_type), frame_id_(frame_id), topic_name_(topic_name),
-  publish_skip_(std::max(static_cast<int>(1.0 / (publish_rate * m->opt.timestep)), 1)),sensor_id_list_(sensor_id_list)
+  publish_skip_(std::max(static_cast<int>(1.0 / (publish_rate * m->opt.timestep)), 1)), sensor_id_list_(sensor_id_list)
 {
   if(frame_id_.empty())
   {

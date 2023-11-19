@@ -7,9 +7,9 @@
 #include <mujoco/mjtnum.h>
 #include <mujoco/mjvisualize.h>
 
-#include <string>
 #include <iostream>
 #include <optional>
+#include <string>
 #include <vector>
 
 namespace MujocoRosUtils
@@ -84,7 +84,7 @@ protected:
                   const std::string & frame_id,
                   const std::string & topic_name,
                   mjtNum publish_rate,
-                  const std::vector<int>& sensor_id_list = {});
+                  const std::vector<int> & sensor_id_list = {});
 
 protected:
   //! Sensor ID
