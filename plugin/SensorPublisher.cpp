@@ -94,8 +94,6 @@ SensorPublisher * SensorPublisher::Create(const mjModel * m, mjData * d, int plu
     {
       if(strstr(mj_id2name(m, mjOBJ_SENSOR, sensor_id), sensor_name_char))
       {
-        // std::cout << sensor_name_char << " : " << mj_id2name(m, mjOBJ_SENSOR, sensor_id) << " : "
-        //           << remove_sub_str(mj_id2name(m, mjOBJ_SENSOR, sensor_id), sensor_name_char) << std::endl;
         if(!sensor_id_list.has_value())
         {
           sensor_id_list = std::vector<int>();
