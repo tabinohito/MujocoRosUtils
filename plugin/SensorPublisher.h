@@ -8,6 +8,9 @@
 #include <mujoco/mjvisualize.h>
 
 #include <string>
+#include <iostream>
+#include <optional>
+#include <vector>
 
 namespace MujocoRosUtils
 {
@@ -21,6 +24,9 @@ public:
   {
     //! Scalar
     MsgScalar = 0,
+
+    //! Scalar ARRAY
+    MsgScalar_ARRAY,
 
     //! Point
     MsgPoint,
@@ -69,6 +75,7 @@ protected:
       \param frame_id frame ID of message header
       \param topic_name topic name
       \param publish_rate publish rate
+      \param sensor_id_list list of sensor ID
    */
   SensorPublisher(const mjModel * m,
                   mjData * d,
@@ -76,11 +83,15 @@ protected:
                   MessageType msg_type,
                   const std::string & frame_id,
                   const std::string & topic_name,
-                  mjtNum publish_rate);
+                  mjtNum publish_rate,
+                  const std::vector<int>& sensor_id_list = {});
 
 protected:
   //! Sensor ID
   int sensor_id_ = -1;
+
+  //! Num of sensor data
+  int max_sensor_num_ = 0;
 
   //! Type of ROS message
   MessageType msg_type_;
@@ -102,6 +113,9 @@ protected:
 
   //! Iteration count of simulation
   int sim_cnt_ = 0;
+
+  //! Sensor ID list
+  const std::vector<int> sensor_id_list_ = {};
 };
 
 } // namespace MujocoRosUtils

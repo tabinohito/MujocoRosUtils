@@ -6,8 +6,8 @@
 
 #include <mujoco/mujoco.h>
 
-#include <iostream>
 #include <mujoco_ros_utils/ScalarStamped.h>
+#include <std_msgs/Float64MultiArray.h>
 
 namespace MujocoRosUtils
 {
@@ -20,7 +20,7 @@ void SensorPublisher::RegisterPlugin()
   plugin.name = "MujocoRosUtils::SensorPublisher";
   plugin.capabilityflags |= mjPLUGIN_SENSOR;
 
-  const char * attributes[] = {"sensor_name", "frame_id", "topic_name", "publish_rate"};
+  const char * attributes[] = {"max_sensor_num", "sensor_name", "frame_id", "topic_name", "publish_rate"};
 
   plugin.nattribute = sizeof(attributes) / sizeof(attributes[0]);
   plugin.attributes = attributes;
@@ -37,8 +37,7 @@ void SensorPublisher::RegisterPlugin()
   // Can only run after forces have been computed
   plugin.needstage = mjSTAGE_ACC;
 
-  plugin.init = +[](const mjModel * m, mjData * d, int plugin_id)
-  {
+  plugin.init = +[](const mjModel * m, mjData * d, int plugin_id) {
     auto * plugin_instance = SensorPublisher::Create(m, d, plugin_id);
     if(!plugin_instance)
     {
@@ -48,22 +47,19 @@ void SensorPublisher::RegisterPlugin()
     return 0;
   };
 
-  plugin.destroy = +[](mjData * d, int plugin_id)
-  {
+  plugin.destroy = +[](mjData * d, int plugin_id) {
     delete reinterpret_cast<SensorPublisher *>(d->plugin_data[plugin_id]);
     d->plugin_data[plugin_id] = 0;
   };
 
   plugin.reset = +[](const mjModel * m, double *, // plugin_state
-                     void * plugin_data, int plugin_id)
-  {
+                     void * plugin_data, int plugin_id) {
     auto * plugin_instance = reinterpret_cast<class SensorPublisher *>(plugin_data);
     plugin_instance->reset(m, plugin_id);
   };
 
   plugin.compute = +[](const mjModel * m, mjData * d, int plugin_id, int // capability_bit
-                    )
-  {
+                    ) {
     auto * plugin_instance = reinterpret_cast<class SensorPublisher *>(d->plugin_data[plugin_id]);
     plugin_instance->compute(m, d, plugin_id);
   };
@@ -73,6 +69,16 @@ void SensorPublisher::RegisterPlugin()
 
 SensorPublisher * SensorPublisher::Create(const mjModel * m, mjData * d, int plugin_id)
 {
+  // max_sensor_num
+  const char * max_sensor_num_char = mj_getPluginConfig(m, plugin_id, "max_sensor_num");
+  int max_sensor_num = strlen(max_sensor_num_char) == 0 ? 1 : atoi(max_sensor_num_char);
+  if(max_sensor_num <= 0)
+  {
+    mju_error("[SensorPublisher] `max_sensor_num` must be positive.");
+    return nullptr;
+  }
+  std::cout << "[SensorPublisher] max_sensor_num: " << max_sensor_num << std::endl;
+
   // sensor_name
   const char * sensor_name_char = mj_getPluginConfig(m, plugin_id, "sensor_name");
   if(strlen(sensor_name_char) == 0)
@@ -81,45 +87,107 @@ SensorPublisher * SensorPublisher::Create(const mjModel * m, mjData * d, int plu
     return nullptr;
   }
   int sensor_id = 0;
+  std::optional<std::vector<int>> sensor_id_list;
   for(; sensor_id < m->nsensor; sensor_id++)
   {
-    if(strcmp(sensor_name_char, mj_id2name(m, mjOBJ_SENSOR, sensor_id)) == 0)
+    if(max_sensor_num > 1)
     {
-      break;
+      if(strstr(mj_id2name(m, mjOBJ_SENSOR, sensor_id), sensor_name_char))
+      {
+        // std::cout << sensor_name_char << " : " << mj_id2name(m, mjOBJ_SENSOR, sensor_id) << " : "
+        //           << remove_sub_str(mj_id2name(m, mjOBJ_SENSOR, sensor_id), sensor_name_char) << std::endl;
+        if(!sensor_id_list.has_value())
+        {
+          sensor_id_list = std::vector<int>();
+        }
+        sensor_id_list.value().push_back(sensor_id);
+      }
+    }
+    else
+    {
+      if(strcmp(sensor_name_char, mj_id2name(m, mjOBJ_SENSOR, sensor_id)) == 0)
+      {
+        break;
+      }
     }
   }
-  if(sensor_id == m->nsensor)
+
+  // check for sensor num
+  if(max_sensor_num != sensor_id_list.value().size())
   {
-    mju_error("[SensorCommand] The sensor with the specified name not found.");
+    std::cerr << "[SensorPublisher] The defined sensor is " << max_sensor_num << std::endl;
+    std::cerr << "[SensorPublisher] The number of finded sensor is " << sensor_id_list.value().size() << std::endl;
+    mju_error("[SensorPublisher] The number of sensor is invalid.");
     return nullptr;
   }
 
   // msg_type
   MessageType msg_type;
-  int sensor_dim = m->sensor_dim[sensor_id];
-  if(sensor_dim == 1)
+  int sensor_dim;
+  // input final sensor id when max_sensor_num > 1
+  if(max_sensor_num > 1)
   {
-    msg_type = MsgScalar;
-  }
-  else if(sensor_dim == 3)
-  {
-    if(m->sensor_type[sensor_id] == mjSENS_FRAMEPOS)
+    if(!(std::find(sensor_id_list.value().begin(), sensor_id_list.value().end(), sensor_id) == sensor_id_list.value().end()))
     {
-      msg_type = MsgPoint;
+      mju_error("[SensorPublisher] The sensors with the specified name not found.");
+      return nullptr;
     }
-    else
     {
-      msg_type = MsgVector3;
+      std::vector<int> sensor_dim_list;
+      for(int i = 0; i < max_sensor_num; i++)
+      {
+        sensor_dim_list.push_back(m->sensor_dim[sensor_id_list.value()[i]]);
+      }
+      if(std::adjacent_find(sensor_dim_list.begin(), sensor_dim_list.end(), std::not_equal_to<int>())
+         != sensor_dim_list.end())
+      {
+        mju_error("[SensorPublisher] The sensors with the specified name have different dimensions.");
+        return nullptr;
+      }
+      sensor_dim = m->sensor_dim[sensor_id_list.value()[0]];
+      if(sensor_dim == 1)
+      {
+        msg_type = MsgScalar_ARRAY;
+      }
+      else
+      {
+        mju_error("[SensorPublisher] Unsupported sensor data dimensions: %d.", sensor_dim);
+        return nullptr;
+      }
     }
-  }
-  else if(sensor_dim == 4)
-  {
-    msg_type = MsgQuaternion;
   }
   else
   {
-    mju_error("[SensorPublisher] Unsupported sensor data dimensions: %d.", sensor_dim);
-    return nullptr;
+    if(sensor_id == m->nsensor)
+    {
+      mju_error("[SensorCommand] The sensor with the specified name not found.");
+      return nullptr;
+    }
+    sensor_dim = m->sensor_dim[sensor_id];
+    if(sensor_dim == 1)
+    {
+      msg_type = MsgScalar;
+    }
+    else if(sensor_dim == 3)
+    {
+      if(m->sensor_type[sensor_id] == mjSENS_FRAMEPOS)
+      {
+        msg_type = MsgPoint;
+      }
+      else
+      {
+        msg_type = MsgVector3;
+      }
+    }
+    else if(sensor_dim == 4)
+    {
+      msg_type = MsgQuaternion;
+    }
+    else
+    {
+      mju_error("[SensorPublisher] Unsupported sensor data dimensions: %d.", sensor_dim);
+      return nullptr;
+    }
   }
 
   // frame_id
@@ -153,18 +221,24 @@ SensorPublisher * SensorPublisher::Create(const mjModel * m, mjData * d, int plu
 
   std::cout << "[SensorPublisher] Create." << std::endl;
 
+  if(sensor_id_list.has_value())
+  {
+    return new SensorPublisher(m, d, sensor_id, msg_type, frame_id, topic_name, publish_rate, sensor_id_list.value());
+  }
+
   return new SensorPublisher(m, d, sensor_id, msg_type, frame_id, topic_name, publish_rate);
 }
 
 SensorPublisher::SensorPublisher(const mjModel * m,
-                                 mjData *, // d
+                                 mjData * ,//d,
                                  int sensor_id,
                                  MessageType msg_type,
                                  const std::string & frame_id,
                                  const std::string & topic_name,
-                                 mjtNum publish_rate)
+                                 mjtNum publish_rate,
+                                 const std::vector<int>& sensor_id_list)
 : sensor_id_(sensor_id), msg_type_(msg_type), frame_id_(frame_id), topic_name_(topic_name),
-  publish_skip_(std::max(static_cast<int>(1.0 / (publish_rate * m->opt.timestep)), 1))
+  publish_skip_(std::max(static_cast<int>(1.0 / (publish_rate * m->opt.timestep)), 1)),sensor_id_list_(sensor_id_list)
 {
   if(frame_id_.empty())
   {
@@ -187,6 +261,10 @@ SensorPublisher::SensorPublisher(const mjModel * m,
   if(msg_type_ == MsgScalar)
   {
     pub_ = nh_->advertise<mujoco_ros_utils::ScalarStamped>(topic_name_, 1);
+  }
+  else if(msg_type_ == MsgScalar_ARRAY)
+  {
+    pub_ = nh_->advertise<std_msgs::Float64MultiArray>(topic_name_, 1);
   }
   else if(msg_type_ == MsgPoint)
   {
@@ -227,6 +305,17 @@ void SensorPublisher::compute(const mjModel * m, mjData * d, int // plugin_id
     mujoco_ros_utils::ScalarStamped msg;
     msg.header = header;
     msg.value = d->sensordata[sensor_adr];
+    pub_.publish(msg);
+  }
+  else if(msg_type_ == MsgScalar_ARRAY)
+  {
+    std_msgs::Float64MultiArray msg;
+    msg.data.resize(sensor_id_list_.size());
+    for(size_t i = 0; i < sensor_id_list_.size(); i++)
+    {
+      sensor_adr = m->sensor_adr[sensor_id_list_[i]];
+      msg.data[i] = d->sensordata[sensor_adr];
+    }
     pub_.publish(msg);
   }
   else if(msg_type_ == MsgPoint)

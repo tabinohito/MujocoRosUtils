@@ -100,6 +100,7 @@
 
     <rangefinder name="box_rangefinder" site="object_center"/>
     <plugin name="sensor_publisher_scalar" plugin="MujocoRosUtils::SensorPublisher" objtype="xbody" objname="object">
+      <config key="max_sensor_num" value="10"/>
       <config key="sensor_name" value="box_rangefinder"/>
       <config key="frame_id" value="map"/>
       <config key="topic_name" value="/box_rangefinder"/>
