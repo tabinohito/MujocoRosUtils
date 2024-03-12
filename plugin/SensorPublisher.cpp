@@ -86,6 +86,8 @@ SensorPublisher * SensorPublisher::Create(const mjModel * m, mjData * d, int plu
     mju_error("[SensorPublisher] `sensor_name` is missing.");
     return nullptr;
   }
+
+  std::cout << "[SensorPublisher] sensor_name: " << sensor_name_char << std::endl;
   int sensor_id = 0;
   std::optional<std::vector<int>> sensor_id_list;
   for(; sensor_id < m->nsensor; sensor_id++)
@@ -146,7 +148,22 @@ SensorPublisher * SensorPublisher::Create(const mjModel * m, mjData * d, int plu
       sensor_dim = m->sensor_dim[sensor_id_list.value()[0]];
       if(sensor_dim == 1)
       {
-        msg_type = MsgScalar_ARRAY;
+        msg_type = MsgScalar;
+      }
+      else if(sensor_dim == 3)
+      {
+        if(m->sensor_type[sensor_id] == mjSENS_FRAMEPOS)
+        {
+          msg_type = MsgPoint;
+        }
+        else
+        {
+          msg_type = MsgVector3;
+        }
+      }
+      else if(sensor_dim == 4)
+      {
+        msg_type = MsgQuaternion;
       }
       else
       {

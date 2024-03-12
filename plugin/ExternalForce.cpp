@@ -204,7 +204,7 @@ void ExternalForce::visualize(const mjModel *, // m
     return;
   }
 
-  mjMARKSTACK;
+  // mjMARKSTACK;
 
   mjtNum pos_local[3];
   pos_local[0] = msg_->pos.x;
@@ -231,7 +231,7 @@ void ExternalForce::visualize(const mjModel *, // m
   force_geom->segid = scn->ngeom;
   scn->ngeom++;
 
-  mjFREESTACK;
+  // mjFREESTACK;
 }
 
 void ExternalForce::callback(const mujoco_ros_utils::ExternalForce::ConstPtr & msg)
