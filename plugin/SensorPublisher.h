@@ -31,8 +31,14 @@ public:
     //! Point
     MsgPoint,
 
+    //! Point ARRAY
+    MsgPoint_ARRAY,
+
     //! 3D vector
     MsgVector3,
+
+    //! 3D vector ARRAY
+    MsgVector3_ARRAY,
 
     //! Quaternion
     MsgQuaternion

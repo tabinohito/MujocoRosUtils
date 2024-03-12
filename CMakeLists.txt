@@ -72,11 +72,14 @@ find_package(
              std_srvs
              geometry_msgs
              visualization_msgs
-             sensor_msgs)
+             sensor_msgs
+             message_generation)
 
 add_message_files(FILES 
   ScalarStamped.msg 
-  ExternalForce.msg )
+  ExternalForce.msg 
+  PointStampedMultiArray.msg
+  Vector3StampedMultiArray.msg)
 
 generate_messages(DEPENDENCIES geometry_msgs)
 

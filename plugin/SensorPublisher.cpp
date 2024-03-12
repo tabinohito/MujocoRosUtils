@@ -8,6 +8,8 @@
 #include <mujoco/mujoco.h>
 
 #include <mujoco_ros_utils/ScalarStamped.h>
+#include <mujoco_ros_utils/PointStampedMultiArray.h>
+#include <mujoco_ros_utils/Vector3StampedMultiArray.h>
 
 namespace MujocoRosUtils
 {
@@ -134,6 +136,7 @@ SensorPublisher * SensorPublisher::Create(const mjModel * m, mjData * d, int plu
       return nullptr;
     }
     {
+      //check sensor dim in list
       std::vector<int> sensor_dim_list;
       for(int i = 0; i < max_sensor_num; i++)
       {
@@ -146,19 +149,21 @@ SensorPublisher * SensorPublisher::Create(const mjModel * m, mjData * d, int plu
         return nullptr;
       }
       sensor_dim = m->sensor_dim[sensor_id_list.value()[0]];
+
+      // set msg_type
       if(sensor_dim == 1)
       {
-        msg_type = MsgScalar;
+        msg_type = MsgScalar_ARRAY;
       }
       else if(sensor_dim == 3)
       {
         if(m->sensor_type[sensor_id] == mjSENS_FRAMEPOS)
         {
-          msg_type = MsgPoint;
+          msg_type = MsgPoint_ARRAY;
         }
         else
         {
-          msg_type = MsgVector3;
+          msg_type = MsgVector3_ARRAY;
         }
       }
       else if(sensor_dim == 4)
@@ -286,9 +291,17 @@ SensorPublisher::SensorPublisher(const mjModel * m,
   {
     pub_ = nh_->advertise<geometry_msgs::PointStamped>(topic_name_, 1);
   }
+  else if(msg_type_ == MsgPoint_ARRAY)
+  {
+    pub_ = nh_->advertise<mujoco_ros_utils::PointStampedMultiArray>(topic_name_, 1);
+  }
   else if(msg_type_ == MsgVector3)
   {
     pub_ = nh_->advertise<geometry_msgs::Vector3Stamped>(topic_name_, 1);
+  }
+  else if(msg_type_ == MsgVector3_ARRAY)
+  {
+    pub_ = nh_->advertise<mujoco_ros_utils::Vector3StampedMultiArray>(topic_name_, 1);
   }
   else // if(msg_type_ == MsgQuaternion)
   {
@@ -343,6 +356,23 @@ void SensorPublisher::compute(const mjModel * m, mjData * d, int // plugin_id
     msg.point.z = d->sensordata[sensor_adr + 2];
     pub_.publish(msg);
   }
+  else if(msg_type_ == MsgPoint_ARRAY)
+  {
+    mujoco_ros_utils::PointStampedMultiArray msg;
+    msg.points.resize(sensor_id_list_.size());
+    msg.header = header;
+    for(size_t i = 0; i < sensor_id_list_.size(); i++)
+    {
+      sensor_adr = m->sensor_adr[sensor_id_list_[i]];
+
+      geometry_msgs::Point point;
+      point.x = d->sensordata[sensor_adr + 0];
+      point.y = d->sensordata[sensor_adr + 1];
+      point.z = d->sensordata[sensor_adr + 2];
+      msg.points[i] = point;
+    }
+    pub_.publish(msg);
+  }
   else if(msg_type_ == MsgVector3)
   {
     geometry_msgs::Vector3Stamped msg;
@@ -350,6 +380,23 @@ void SensorPublisher::compute(const mjModel * m, mjData * d, int // plugin_id
     msg.vector.x = d->sensordata[sensor_adr + 0];
     msg.vector.y = d->sensordata[sensor_adr + 1];
     msg.vector.z = d->sensordata[sensor_adr + 2];
+    pub_.publish(msg);
+  }
+  else if(msg_type_ == MsgVector3_ARRAY)
+  {
+    mujoco_ros_utils::Vector3StampedMultiArray msg;
+    msg.x.resize(sensor_id_list_.size());
+    msg.y.resize(sensor_id_list_.size());
+    msg.z.resize(sensor_id_list_.size());
+    msg.header = header;
+    for(size_t i = 0; i < sensor_id_list_.size(); i++)
+    {
+      sensor_adr = m->sensor_adr[sensor_id_list_[i]];
+
+      msg.x[i] = d->sensordata[sensor_adr + 0];
+      msg.y[i] = d->sensordata[sensor_adr + 1];
+      msg.z[i] = d->sensordata[sensor_adr + 2];
+    }
     pub_.publish(msg);
   }
   else // if(msg_type_ == MsgQuaternion)
